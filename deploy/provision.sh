@@ -41,7 +41,16 @@ while IFS=, read -r name token; do
     "${H_INT[@]}" -d "{\"ssoUser\":\"${name}\",\"password\":\"${SSO_PASSWORD}\"}")
   case "$code" in
     200|201) echo "  ✓ ${name}" ;;
+    # 已存在是正常情况（重复执行本脚本时必然发生）。
+    # SSO 对此返回 400 + already exists，不是 409，所以要看消息体判断。
     409)     echo "  = ${name}（已存在）" ;;
+    400)
+      if grep -qi "already exists" /tmp/sso_out; then
+        echo "  = ${name}（已存在）"
+      else
+        echo "  ✗ ${name}  HTTP ${code}  $(head -c 160 /tmp/sso_out)"
+      fi
+      ;;
     *)       echo "  ✗ ${name}  HTTP ${code}  $(head -c 160 /tmp/sso_out)" ;;
   esac
 done < "$LIST"

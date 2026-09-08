@@ -1,12 +1,12 @@
 # LiteLLM 网关层 —— 叠加在基础 docker-compose.yml 之上
 #
-# 为什么必须有这一层：
-#   GHCP Proxy 的身份来自请求头 X-User-Identity，客户端能随便改。
-#   直接把 Proxy 的 API_KEY 发给用户 = 任何人都能冒充任意身份、用光别人额度。
-#   LiteLLM 用虚拟 key 解决这个问题：
-#     - 每个用户/团队一把 sk-xxx
-#     - key 的 metadata.trusted_user_id 决定身份，客户端改不了
-#     - per-key 的 rpm / tpm / 预算 / 并发 各自独立
+# 这一层负责对外的身份与配额：
+#   - 每个用户/团队一把虚拟 key（sk-xxx），由管理员签发
+#   - 身份写在 key 的 metadata.trusted_user_id 里，由服务端解析，不看客户端请求头
+#   - 每把 key 的 rpm / tpm / 预算 / 并发上限各自独立，互不影响
+#
+# 分工：LiteLLM 认证与限额，Proxy 负责账号池调度。两者职责分离，
+# Proxy 作为内部服务只接受来自 LiteLLM 的调用。
 #
 # 用法：
 #   docker compose -f docker-compose.yml -f docker-compose.litellm.yml -f docker-compose.caddy.yml up -d
@@ -48,12 +48,17 @@ services:
       DATABASE_URL: postgresql://litellm:${LITELLM_DB_PASSWORD}@litellm-db:5432/litellm
       REDIS_HOST: litellm-redis
       REDIS_PORT: "6379"
-      # 指向池化 Proxy —— LiteLLM 是唯一被允许调用 Proxy 的客户端
+      # 指向池化 Proxy —— LiteLLM 是唯一调用 Proxy 的客户端
       GHCP_PROXY_BASE_URL: http://proxy:3000
       GHCP_PROXY_API_KEY: ${API_KEY}
       STORE_MODEL_IN_DB: "False"
+      # 管理后台登录凭据。不设则回落为 admin + LITELLM_MASTER_KEY，
+      # 建议显式设置，把后台登录和 master key 解耦。
+      UI_USERNAME: "${LITELLM_UI_USERNAME:-admin}"
+      UI_PASSWORD: "${LITELLM_UI_PASSWORD:-${LITELLM_MASTER_KEY}}"
     ports:
-      - "${LITELLM_PORT:-4000}:4000"
+      # 同样只绑回环地址，对外经 Caddy 的 api.<域名>
+      - "${BIND_ADDR:-127.0.0.1}:${LITELLM_PORT:-4000}:4000"
     depends_on:
       litellm-db:
         condition: service_healthy

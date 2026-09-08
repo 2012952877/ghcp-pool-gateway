@@ -55,18 +55,25 @@ Console 是 **Proxy / SSO / Login 三个内部服务的运维界面**。它通�
 | 下载上游失败的完整快照 | 改 Caddy / NSG / 证书 |
 | 改 Console 管理员密码、SSO/Login 运行时参数 | 管理多个 Console 管理员（只支持一个） |
 
-### 1.1 一个必须先确认的安全前提
+### 1.1 从哪里访问 Console
 
-`docker-compose.yml` 里四个服务**都把端口发布到了 VM 主机**：
+Console 通过 Caddy 以 HTTPS 对外提供：
 
-| 服务 | compose 里的端口映射 | 直连后果 |
-|---|---|---|
-| proxy | `${PROXY_PORT:-3000}:3000` | ⚠️ **身份可任意伪造**（实测：同一个 `API_KEY` 分别发 `team-pool` / `demo01` / `demo02` 三种 `X-User-Identity` 全部返回 200）。绝不能对公网开放 |
-| sso | `${SSO_PORT:-7001}:7001` | 内部服务，不应暴露 |
-| login | `${LOGIN_PORT:-7003}:7003` | 内部服务，不应暴露 |
-| console | `${CONSOLE_PORT:-7004}:7004` | `http://<VM 公网 IP>:7004` 能**明文**打开 Console（没有 TLS，登录 cookie 走明文） |
+```
+https://console.<PUBLIC_HOST>/
+```
 
-所以：**NSG 只放行 80 / 443（以及你自己要用的 22），其余端口一律不开**。Console 只从 `https://console.<PUBLIC_HOST>/` 走 Caddy 访问。上线前用一台外网机器 `curl -m 5 http://<VM 公网 IP>:3000/` 和 `:7004` 各试一次，**期望是超时/拒绝**；能连上就说明 NSG 开错了。
+`proxy` / `sso` / `login` / `console` 四个服务在宿主机上的端口映射默认绑定 `127.0.0.1`
+（由 `.env` 的 `BIND_ADDR` 控制），只有服务器本机能连，因此不存在绕过 TLS 明文访问 Console 的路径。
+
+网络层放行 **80 / 443**（以及你自己要用的 22）即可。
+
+上线后可以从一台外部机器验证一次：
+
+```bash
+curl -m 5 http://<服务器地址>:7004/     # 期望：超时或拒绝
+curl -sI https://console.<PUBLIC_HOST>/ # 期望：200 或 302
+```
 
 ---
 
