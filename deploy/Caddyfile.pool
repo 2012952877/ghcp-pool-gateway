@@ -1,0 +1,18 @@
+{
+	email admin@example.com
+}
+
+# 对外的推理入口 —— 指向 LiteLLM，不是 Proxy。
+#
+# ⚠️ 绝不要把 Proxy(3000) 直接暴露到公网：
+#    Proxy 的身份来自 X-User-Identity 请求头，客户端能任意伪造。
+#    LiteLLM 的 trusted_identity_hook 会剥掉这个头并按虚拟 key 重写，
+#    是整套多租户隔离的唯一安全边界。
+api.{$PUBLIC_HOST} {
+	reverse_proxy litellm:4000
+}
+
+# 运维控制台：账号、账号池、请求统计、错误诊断
+console.{$PUBLIC_HOST} {
+	reverse_proxy console:7004
+}

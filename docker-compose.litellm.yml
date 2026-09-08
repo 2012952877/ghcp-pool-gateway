@@ -1,0 +1,72 @@
+# LiteLLM 网关层 —— 叠加在基础 docker-compose.yml 之上
+#
+# 为什么必须有这一层：
+#   GHCP Proxy 的身份来自请求头 X-User-Identity，客户端能随便改。
+#   直接把 Proxy 的 API_KEY 发给用户 = 任何人都能冒充任意身份、用光别人额度。
+#   LiteLLM 用虚拟 key 解决这个问题：
+#     - 每个用户/团队一把 sk-xxx
+#     - key 的 metadata.trusted_user_id 决定身份，客户端改不了
+#     - per-key 的 rpm / tpm / 预算 / 并发 各自独立
+#
+# 用法：
+#   docker compose -f docker-compose.yml -f docker-compose.litellm.yml -f docker-compose.caddy.yml up -d
+
+services:
+  litellm-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: ${LITELLM_DB_PASSWORD:?set LITELLM_DB_PASSWORD}
+      POSTGRES_DB: litellm
+    volumes:
+      - litellm-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm -d litellm"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  litellm-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  litellm:
+    build:
+      context: ./litellm
+      dockerfile: Dockerfile
+    image: ghcp-litellm:local
+    restart: unless-stopped
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?set LITELLM_MASTER_KEY}
+      DATABASE_URL: postgresql://litellm:${LITELLM_DB_PASSWORD}@litellm-db:5432/litellm
+      REDIS_HOST: litellm-redis
+      REDIS_PORT: "6379"
+      # 指向池化 Proxy —— LiteLLM 是唯一被允许调用 Proxy 的客户端
+      GHCP_PROXY_BASE_URL: http://proxy:3000
+      GHCP_PROXY_API_KEY: ${API_KEY}
+      STORE_MODEL_IN_DB: "False"
+    ports:
+      - "${LITELLM_PORT:-4000}:4000"
+    depends_on:
+      litellm-db:
+        condition: service_healthy
+      litellm-redis:
+        condition: service_healthy
+      proxy:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=5).status==200 else 1)\""]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+
+volumes:
+  litellm-db-data:

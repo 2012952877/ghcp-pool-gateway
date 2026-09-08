@@ -1,0 +1,31 @@
+# ── 凭据：任何情况下都不要提交 ──
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*_key
+*_key.pub
+seed-accounts.json
+import-payload.json
+certs/
+
+# ── 构建产物 ──
+node_modules/
+dist/
+*.tsbuildinfo
+
+# ── 运行时 ──
+*.log
+data/
+*.sqlite
+*.sqlite-*
+
+# ── 测试临时文件 ──
+_vc*.json
+step1.json
+replay.json
+tampered.json
+good.json
+bad.json
+ask.json

@@ -1,0 +1,25 @@
+# Caddy 边缘层：自动 TLS（Let's Encrypt / ZeroSSL）+ 按域名分流
+#
+# 用法：
+#   docker compose -f docker-compose.yml -f docker-compose.litellm.yml -f docker-compose.caddy.yml up -d
+services:
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    environment:
+      # 形如 20.78.139.35.nip.io 或客户自己的域名
+      PUBLIC_HOST: ${PUBLIC_HOST:?set PUBLIC_HOST}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile.pool:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - litellm
+      - console
+
+volumes:
+  caddy-data:
+  caddy-config:

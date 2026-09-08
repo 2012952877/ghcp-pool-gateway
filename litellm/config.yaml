@@ -1,0 +1,61 @@
+# LiteLLM 网关配置 —— 单机 docker-compose 版
+#
+# 与生产 AKS 版的差异：
+#   - Redis 去掉 ssl（容器内网通信，无需 TLS）
+#   - 其余保持一致
+#
+# 关键：litellm_settings.callbacks 里的 trusted_identity_hook 是安全边界。
+# 它会删掉客户端传来的所有 X-User-Identity 头，改用虚拟 key 元数据里的
+# trusted_user_id 强制注入 —— 没有它，任何持 key 的人都能冒充任意身份。
+
+model_list:
+  - model_name: "claude-*"
+    litellm_params:
+      model: anthropic/claude-*
+      api_base: os.environ/GHCP_PROXY_BASE_URL
+      api_key: os.environ/GHCP_PROXY_API_KEY
+  - model_name: "*"
+    litellm_params:
+      model: openai/*
+      api_base: os.environ/GHCP_PROXY_BASE_URL
+      api_key: os.environ/GHCP_PROXY_API_KEY
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_connection_pool_limit: 4
+  proxy_batch_write_at: 60
+  disable_error_logs: true
+  store_model_in_db: false
+  allow_requests_on_db_unavailable: false
+  # 不透传客户端头 —— 与 trusted_identity_hook 配合，杜绝身份伪造
+  forward_client_headers_to_llm_api: false
+  coordination_redis:
+    host: os.environ/REDIS_HOST
+    port: os.environ/REDIS_PORT
+  # 建 key 时能填的上限（护栏，不是运行时限流）
+  upperbound_key_generate_params:
+    duration: 90d
+    max_budget: 500
+    budget_duration: 30d
+    max_parallel_requests: 20
+    rpm_limit: 600
+    tpm_limit: 1000000
+
+router_settings:
+  routing_strategy: simple-shuffle
+  redis_host: os.environ/REDIS_HOST
+  redis_port: os.environ/REDIS_PORT
+
+litellm_settings:
+  strip_anthropic_total_tokens: true
+  callbacks:
+    - trusted_identity_hook.trusted_identity_hook
+  cache: true
+  cache_params:
+    type: redis
+    host: os.environ/REDIS_HOST
+    port: os.environ/REDIS_PORT
+  request_timeout: 600
+  set_verbose: false
+  json_logs: true
+  drop_params: false
