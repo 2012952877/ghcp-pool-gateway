@@ -56,16 +56,6 @@ api.githubcopilot.com
 | `sticky-affinity` | 同一会话固定同一账号 | 需按会话审计追溯；客户端用了 `/responses` 的 `previous_response_id` 等有状态接口 |
 | `round-robin` | 按会话哈希分配 | 需要确定性映射但不看负载 |
 
-### 关键结论：**prompt 缓存跨账号共享**
-
-实测：`demo01` 写入缓存 2000 token → `demo02` 发相同请求直接 `cache_read=1716` 命中。
-
-原因是所有 GitHub Copilot 账号共用同一个 Anthropic 组织（从 thinking 块签名解出组织 ID
-`ced1f98e-0b51-4610-8282-4e5d88384574`）。
-
-**推论：按负载均匀分摊不会损失缓存命中率**，可以放心用 `least-loaded`。
-这与「换账号会丢缓存」的直觉相反。验证脚本见 `tests/cache-scope.mts`。
-
 ### 其他机制
 
 - **选择算法**：Rendezvous（HRW）哈希，支持权重。增删账号时只重映射受影响的那部分。

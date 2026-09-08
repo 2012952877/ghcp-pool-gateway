@@ -192,8 +192,8 @@ acme-02,gho_yyyyyyyyyyyyyyyyyyyy
 | `sticky-affinity` | 同一会话固定同一账号 | 需按会话审计追溯，或使用方用了有状态接口 |
 | `round-robin` | 按会话哈希分配 | 同一会话结果稳定但不看负载 |
 
-> **换账号不会丢 prompt 缓存。** 实测缓存在 Anthropic 组织层共享，跨账号可命中，
-> 因此均匀分摊不影响缓存收益。
+> prompt 缓存由客户端的 `cache_control` 标记驱动，网关侧不需要配置。
+> Claude Code 自带该字段；自研客户端需要自己加。
 
 ---
 

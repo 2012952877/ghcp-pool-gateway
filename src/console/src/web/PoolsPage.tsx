@@ -110,9 +110,7 @@ export function PoolsPage(props: { notify: Notify }) {
             <p className="mt-1 text-sm text-slate-600">
               把一个对外暴露的 identity 映射到后台多个真实账号，提升可用总额度与并发能力。
               客户端只看到池名，实际由哪个账号承接由这里的策略决定；某个账号被限流会自动冷却并切换，请求不中断。
-              <strong className="text-slate-900"> prompt 缓存不受策略影响</strong>
-              —— 实测缓存在 Anthropic 组织层共享，跨 GHCP 账号命中，因此换账号不会丢缓存，
-              可以放心按负载均匀分摊。
+              加入或移出成员都是热操作，无需重启服务。
             </p>
           </div>
           <div className="flex flex-wrap items-end gap-2">

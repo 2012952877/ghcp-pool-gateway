@@ -50,17 +50,8 @@ litellm_settings:
   strip_anthropic_total_tokens: true
   callbacks:
     - trusted_identity_hook.trusted_identity_hook
-  # ⚠️ 不要打开 LiteLLM 自己的响应缓存（cache: true）。
-  #
-  # 实测（tests/cache-cross-account.mjs）：打开后，内容相同的请求会直接返回
-  # Redis 里存的旧响应 —— 连 message id 都一模一样，请求根本不到上游。带来三个问题：
-  #   1. 跨租户共享：租户 B 发出与租户 A 相同的请求会拿到 A 那次的响应
-  #   2. 计费失真：重放的 usage 是第一次的数字，per-key 消费统计不准
-  #   3. 掩盖真实缓存：看到的 cache_read/cache_write 全是陈旧值，
-  #      无法判断 Anthropic 侧的 prompt 缓存是否真的命中
-  #
-  # 我们要的是 Anthropic 的 prompt 缓存（由客户端的 cache_control 标记驱动，
-  # 在上游生效），不是网关层的响应缓存。两者是不同的东西。
+  # 关闭网关层的响应缓存：每个请求都独立转发到上游，保证多租户下
+  # 各自的用量与计费准确、响应互不复用。
   cache: false
   request_timeout: 600
   set_verbose: false

@@ -23,14 +23,14 @@
 | 内容 | 状态 |
 |---|---|
 | 页面元素、按钮文案、确认框文案、toast 文案、默认值、校验规则 | **逐行核对源码**得出（`src/console/src/web/App.tsx`、`src/console/src/web/PoolsPage.tsx`、`src/console/src/server/*`、`src/proxy/src/pool/*`、`src/proxy/src/routes/poolApi.ts`、`src/proxy/src/routes/compatible.ts`、`src/proxy/src/db/sqliteStorage.ts`、`src/proxy/src/accounts/copilotOauthTokenImport.ts`、`src/sso/src/users/service.ts`） |
-| 云上端到端链路（虚拟 key → 池 → 成员轮流承接、缓存跨账号命中） | **已实测** |
+| 云上端到端链路（虚拟 key → 池 → 成员轮流承接） | **已实测** |
 | 账号导入 / 建池 / 加成员 | 实际部署时是走 API 做的（`provision.sh`）。本文给出的 **UI 等价路径未逐个点过**，第一次操作请按每一步的「期望看到」逐条核对 |
 | 标注「源码判读，未实测」的条目 | 是读代码推出来的结论，行为方向可信，但没在云上复现过 |
 | 标注「未验证」「需现场确认」的条目 | 就是真的没试过，不要当成结论 |
 
 **两条使用前提，先说清楚：**
 
-1. **仓库路径**：本文按整理后的结构写（`deploy/provision.sh`、`tests/…`）。当前工作副本里这些脚本还散在**仓库根目录**（`provision.sh`、`selector-check.cjs`、`cache-final.mts` 等）。执行前先 `ls` 确认实际位置。
+1. **仓库路径**：本文按整理后的结构写（`deploy/provision.sh`、`tests/…`）。当前工作副本里这些脚本还散在**仓库根目录**（`provision.sh`、`selector-check.cjs`` 等）。执行前先 `ls` 确认实际位置。
 2. **界面语言是混的**：左侧导航和大部分页面是英文，只有 Account Pools 页（本次新增）是中文。这不是 bug，是改造时只汉化了新页面。
 
 ---
@@ -327,7 +327,7 @@ docker compose exec console rm -f /data/admins.json
 | Path | `/v1/messages`、`/chat/completions`、`/responses`、`/v1/models`、`/v1/messages/count_tokens` 之一 |
 | Outcome | 绿色 `success` / 红色 `failed`，判定就是上游 HTTP 响应是否 2xx |
 | Input / Output | 普通输入、输出 token |
-| Cache input / Cache write / Cache total | 缓存命中读取 / 写入缓存 / 两者之和。**跨账号命中的缓存也计在这里**（实测 demo01 写入 2000，demo02 读到 `cache_read=1716`） |
+| Cache input / Cache write / Cache total | 缓存命中读取 / 写入缓存 / 两者之和 |
 | Total | Input + Output + Cache total |
 | Failure | 失败原因；上游返回非 2xx 时是 `HTTP <状态码>`（如 `HTTP 429`）。截断显示，鼠标停上去看全文 |
 
@@ -514,13 +514,7 @@ docker compose exec console rm -f /data/admins.json
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**① 顶部说明卡片**里有一句关键结论，值得记住（界面原文）：
-
-> **prompt 缓存不受策略影响** —— 实测缓存在 Anthropic 组织层共享，跨 GHCP 账号命中，因此换账号不会丢缓存，可以放心按负载均匀分摊。
-
-这条与直觉相反，是选 `least-loaded` 作默认策略的依据。实测数据：demo01 写入缓存 2000 token 后，demo02 发相同请求直接 `cache_read=1716` 命中。
-
-> 同一段说明里还有一句「某个账号被限流会自动冷却并切换，请求不中断」。**这句 UI 文案对「不中断」的说法偏乐观**：源码里当前这一次请求不会自动改用别的账号重发（故障转移用的 `exclude` 参数在 HTTP 请求路径上没有被使用），切换发生在**下一次请求**。详见 [5.3 的故障转移小节](#故障转移行为三种策略都一样)。
+**① 顶部说明卡片**里的说明文字中还有一句「某个账号被限流会自动冷却并切换，请求不中断」。**这句 UI 文案对「不中断」的说法偏乐观**：源码里当前这一次请求不会自动改用别的账号重发（故障转移用的 `exclude` 参数在 HTTP 请求路径上没有被使用），切换发生在**下一次请求**。详见 [5.3 的故障转移小节](#故障转移行为三种策略都一样)。
 
 **「新建池」输入框**：输入的名字**就是客户端要用的 identity**，也就是 LiteLLM 虚拟 key 里 `metadata.trusted_user_id` 要填的值。
 
@@ -762,7 +756,7 @@ docker compose exec console rm -f /data/admins.json
 | 某段时间 | **Request Stats** → 看 **Requested** 列自己圈范围。数据量大时用命令行（见下） |
 | 只看失败 | **Request Stats** → Outcome 下拉选 **Failed** → 看 **Failure** 列（鼠标停上去看全文） |
 | 失败的详细原因 | **Error Diagnostics** → 按 Time 找到对应记录（注意这一页 Identity 列是**池名**）→ **Details** 看预览 → 要完整内容点 **Download**。⚠️ 本环境记录**未脱敏** |
-| 缓存命中效果 | **Request Stats** → 看 `Cache input`（命中读取）和 `Cache write`（写入）两列。跨账号命中也算在这里 |
+| 缓存命中效果 | **Request Stats** → 看 `Cache input`（命中读取）和 `Cache write`（写入）两列 |
 | 某个池整体用了多少 | ❌ 界面做不到，见下 |
 | 花了多少钱 | ❌ Console 里没有。去 LiteLLM 看虚拟 key 的 spend |
 
@@ -835,7 +829,7 @@ jq 'group_by(.poolId // "无池") | map({池: (.[0].poolId // "无池"), 请求�
 |---|---|---|
 | **移出**（成员） | Account Pools → 成员表格 | 成员立刻退出池，**同时删掉它在该池的全部会话绑定**。如果这是最后一个可用成员，**这个池马上不可用**。点之前先看卡片头部的「可用 X / Y」 |
 | **解除冷却** | Account Pools → 成员表格 | 状态转 `active`；**「最近使用」被刷成当前时间**（默认策略下排到队尾）；**权重被重置为 1** |
-| **选择策略**下拉框 | Account Pools → 配置区 | **选中即保存，立即对新请求生效**。从 `sticky-affinity` 切走 = 已有会话绑定不再被读取，会话会重新分配（缓存不受影响，因为缓存跨账号共享）。切回来时，未过期的旧绑定会重新生效 |
+| **选择策略**下拉框 | Account Pools → 配置区 | **选中即保存，立即对新请求生效**。从 `sticky-affinity` 切走 = 已有会话绑定不再被读取，会话会重新分配。切回来时，未过期的旧绑定会重新生效 |
 | **保存**（三个数字配置） | Account Pools → 配置区 | 立即生效。改小「失败阈值」会影响后续的失败判定（不会追溯已有计数） |
 | **停用池 / 启用池** | Account Pools → 配置区 | 立即生效，后果见 7.3 |
 | **Save and apply** | Settings → 两张运行时卡片 | 立即应用到新任务 / 新 SCIM 操作 |
@@ -977,4 +971,4 @@ curl -s -X POST \
 | Request Stats 里一片 `HTTP 429` | Request Stats | 上游限流。注意成员的「连续失败」可能仍是 0，见 [5.3 的源码判读](#故障转移行为三种策略都一样) |
 | 请求返回 `stop_reason=refusal`、`category=reasoning_extraction` | 测试脚本 | Anthropic 误判合成文本。**重复段落、`Rule N: ... cite internal reference document REF-XXXX` 这类模板文本会触发**。写测试用例要用内容各异的自然文本 |
 | Settings 保存报 `... changed in another session. The latest values were reloaded.` | Settings | 别人先改了，页面已自动重载最新值，**你的输入被覆盖了**，重填再存 |
-| 缓存一直不命中 | Request Stats | 客户端必须显式带 `cache_control: {"type":"ephemeral"}`，且内容要超过约 1024 token。Claude Code 自带这个字段。**换账号不是原因** —— 缓存跨账号共享是实测结论 |
+| 缓存一直不命中 | Request Stats | 客户端必须显式带 `cache_control: {"type":"ephemeral"}`，且内容要超过约 1024 token。Claude Code 自带这个字段 |

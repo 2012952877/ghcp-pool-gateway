@@ -4,7 +4,7 @@ import type { Request } from 'express';
 /**
  * 推导「会话 key」—— 决定同一段对话落到池里的哪个账号。
  *
- * 为什么重要：Anthropic 的 prompt 缓存是**按账号隔离**的。
+ * 为什么重要：会话键决定 sticky-affinity 策略下同一会话落在哪个成员。
  * 只要同一段上下文每次都落到同一账号，cache_read（50 AIU/1M）就能命中；
  * 一旦换账号，就要按 cache_write（625 AIU/1M）重写一遍。
  *
